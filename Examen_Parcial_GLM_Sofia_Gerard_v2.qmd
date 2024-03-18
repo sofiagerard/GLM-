@@ -1,0 +1,1034 @@
+---
+title: "Examen Parcial GLM Sofia Gerard 149721"
+format: html
+embed-resources: true
+editor: visual
+---
+
+```{r}
+
+set.seed(1996) 
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(rstan)
+library(rstanarm)
+library(cmdstanr)
+library(rstantools)
+library(nleqslv)
+library(bayesplot) 
+library(coda)
+```
+
+## Ejercicio 1: 
+
+La expectativa de $X$ se calcula como:
+
+$$
+E[X] = \frac{\alpha}{\alpha + \beta} = 0.6
+$$
+
+Lo que nos lleva a la relación entre $\alpha$ y $\beta$:
+
+$$
+0.4\alpha = 0.6\beta
+$$
+
+$$
+\frac{2}{3}\alpha = \beta
+$$
+
+La varianza de $X$ está dada por:
+
+$$
+\text{var}[X] = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)} = 0.042^2
+$$
+
+Desarrollando la ecuación, obtenemos:
+
+$$
+\left(\frac{2}{3}\alpha\right)^2\left(\frac{5}{3}\alpha + 1\right) = 0.042^2
+$$
+
+$$
+\frac{2}{3}\alpha^2 = (0.042)^2\left(\frac{5}{3^2}\alpha^2\right)\left(\frac{5}{3}\alpha + 1\right)
+$$
+
+$$
+\frac{2}{3}\alpha^2 = (0.042)^2\left(\frac{5^3}{3^3}\alpha^3 + \frac{5^2}{3^2}\alpha\right)
+$$
+
+$$
+\frac{2}{3}\alpha^2 = 0.042^2\left(\frac{5^3}{3^3}\alpha^3\right)
+$$
+
+Finalmente, asumiendo que $\alpha \neq 0$:
+
+$$
+\alpha = \frac{\frac{2}{3} - (0.042)^2\left(\frac{5^2}{3^2}\right)}{0.042^2\left(\frac{5^3}{3^3}\right)} \approx 89.4
+$$
+
+$$
+\beta = \frac{2}{3}\alpha \approx 59.6
+$$
+
+```{r}
+
+# μ = α / (α + β) 
+# σ² = αβ / ((α + β)²(α + β + 1))
+
+# Datos dados
+mu <- 0.60  # Tasa promedio
+sigma <- 0.04  # Desviación estándar
+
+# Calcular la varianza
+variance <- sigma^2
+
+# Calcular los parámetros alpha y beta usando las fórmulas
+alpha <- (mu * (1 - mu) / variance - 1) * mu
+beta <- alpha * (1 / mu - 1)
+
+# Mostrar los valores de alpha y beta
+print(paste("Alpha:", alpha))
+print(paste("Beta:", beta))
+
+
+# Graficar la distribución Beta
+curve(dbeta(x, shape1 = alpha, shape2 = beta), 
+      from = 0, to = 1, 
+      main = "Distribución Beta", 
+      xlab = "x", 
+      ylab = "Densidad",
+      col = "blue")
+
+```
+
+#### Inciso b
+
+```{r}
+
+# Distribución Normal transformada para conocimiento inicial 
+
+mean = mu
+
+# Graficar la distribución normal
+x <- seq(0, 1, length.out = 100)
+y <- dnorm(x, mean = mean, sd = sqrt(variance))
+plot(x, y, type = "l", col = "blue", lwd = 2, 
+     main = paste("Distribución normal(", mean, ",", variance, ")"),
+     xlab = "x", ylab = "Densidad de probabilidad")
+
+
+```
+
+#### Inciso c
+
+```{r}
+
+# Inicial de referencia no informativa para theta
+
+x <- seq(0, 1, length.out = 100)
+y <- rep(1, 100)
+
+plot(x, y, type = "l", col = "blue", lwd = 2, 
+     main = expression(paste(theta, "  Unif(0,1)")),
+     xlab = "x", ylab = "Densidad de probabilidad")
+
+```
+
+#### Inciso d
+
+```{r}
+
+# Modelo a
+
+# Datos del año 2024
+datos <- list(solicitados = 100, otorgados = 50)
+
+# Distribución inicial del inciso (a) - Distribución Beta
+# Parámetros alpha y beta iniciales
+alpha_prior <- 89.40
+beta_prior <- 59.60
+
+# Combinar datos y parámetros iniciales en una lista para Stan
+datos_stan1 <- list(solicitados = datos$solicitados, otorgados = datos$otorgados, alpha_prior = alpha_prior, beta_prior = beta_prior)
+
+# Especifica la ruta del archivo Stan
+ruta_archivo_stan1 <- "Ej1-modeloa.stan"
+
+# Compilar el modelo Stan desde el archivo
+modelo_stan1 <- stan_model(file = ruta_archivo_stan1)
+
+# Ejecutar el modelo Stan
+resultados_stan1 <- sampling(modelo_stan1, data = datos_stan1, chains = 4, iter = 10000)
+
+# Resumen de los resultados
+print(summary(resultados_stan1))
+
+# Extraer muestras de theta 
+muestras_theta1 <- extract(resultados_stan1)$theta
+
+# Graficar las posteriores de theta
+hist(muestras_theta1, breaks = 30, main = "Posterior de theta con Beta", xlab = "theta", ylab = "Densidad", col = "skyblue")
+
+
+```
+
+```{r}
+
+# Modelo b 
+
+# Datos del año 2024
+datos <- list(solicitados = 100, otorgados = 50)
+
+# Distribución inicial del inciso (b) - Distribución Normal Modificada (0.6, 0.0016)
+# Parámetros mu y sigma iniciales
+mu_prior <- 0.6
+sigma_prior <- 0.0016
+
+# Combinar datos y parámetros iniciales en una lista para Stan
+datos_stan2 <- list(solicitados = datos$solicitados, otorgados = datos$otorgados, mu_prior = mu_prior, sigma_prior = sigma_prior)
+
+# Especifica la ruta del archivo Stan
+ruta_archivo_stan2 <- "Ej1-modelob.stan"
+
+# Compilar el modelo Stan desde el archivo
+modelo_stan2 <- stan_model(file = ruta_archivo_stan2)
+
+# Ejecutar el modelo Stan
+resultados_stan2 <- sampling(modelo_stan2, data = datos_stan2, chains = 4, iter = 10000)
+
+# Resumen de los resultados
+print(summary(resultados_stan2))
+
+# Extraer muestras de theta 
+muestras_theta2 <- extract(resultados_stan2)$theta
+
+# Graficar las posteriores de theta
+hist(muestras_theta2, breaks = 30, main = "Posterior de theta con Normal Transformada", xlab = "theta", ylab = "Densidad", col = "skyblue")
+
+```
+
+```{r}
+
+# Modelo c 
+
+# Datos del año 2024
+datos <- list(solicitados = 100, otorgados = 50)
+
+# Distribución inicial del inciso (c) - Distribución Uniforme (0,1)
+# No hay parámetros a especificar
+
+# Combinar datos y parámetros iniciales en una lista para Stan
+datos_stan3 <- list(solicitados = datos$solicitados, otorgados = datos$otorgados)
+
+# Especifica la ruta del archivo Stan
+ruta_archivo_stan3 <- "Ej1-modeloc.stan"
+
+# Compilar el modelo Stan desde el archivo
+modelo_stan3 <- stan_model(file = ruta_archivo_stan3)
+
+# Ejecutar el modelo Stan
+resultados_stan3 <- sampling(modelo_stan3, data = datos_stan3, chains = 4, iter = 10000)
+
+# Resumen de los resultados
+print(summary(resultados_stan3))
+
+# Extraer muestras de theta 
+muestras_theta3 <- extract(resultados_stan3)$theta
+
+# Graficar las posteriores de theta
+plot(density(muestras_theta3), main = expression(paste(theta, "  Unif(0,1)")), xlab = "theta", ylab = "Densidad de probabilidad", col = "blue")
+
+
+```
+
+#### Inciso e
+
+```{r}
+# Cargar las muestras de theta obtenidas en los tres modelos
+muestras_theta_a <- extract(resultados_stan1)$theta
+muestras_theta_b <- extract(resultados_stan2)$theta
+muestras_theta_c <- extract(resultados_stan3)$theta
+
+# Calcular la media de las distribuciones posteriores de theta
+theta_media_a <- mean(muestras_theta_a)
+theta_media_b <- mean(muestras_theta_b)
+theta_media_c <- mean(muestras_theta_c)
+
+# Imprimir los resultados
+cat("Estimación de la tasa de créditos otorgados usando las tres distribuciones finales:\n")
+cat("Inciso (a):", theta_media_a, "\n")
+cat("Inciso (b):", theta_media_b, "\n")
+cat("Inciso (c):", theta_media_c, "\n")
+
+```
+
+#### Inciso f
+
+```{r}
+# Calcular el momio de otorgar un crédito utilizando las medias de las distribuciones finales phi = theta / ( 1 - theta ) 
+
+# Calcular el momio de otorgar un crédito utilizando las medias de las distribuciones finales
+phi_a <- theta_media_a / (1 - theta_media_a)
+phi_b <- theta_media_b / (1 - theta_media_b)
+phi_c <- theta_media_c / (1 - theta_media_c)
+
+# Imprimir los resultados
+cat("Momio de otorgar un crédito usando las medias de las distribuciones finales:\n")
+cat("Inciso (a):", phi_a, "\n")
+cat("Inciso (b):", phi_b, "\n")
+cat("Inciso (c):", phi_c, "\n")
+
+```
+
+## Ejercicio 2:
+
+#### Inciso a
+
+```{r}
+
+# Datos de las utilidades mensuales ( # verosimilitud normal(mu, sigma**2))
+
+utilidades <- c(212, 207, 210, 196, 223, 193, 196, 210, 202, 221)
+
+N <- length(utilidades)
+prior_mu_mean <- 200
+prior_mu_var <- 40
+prior_sigma_shape <- 10
+prior_sigma_rate <- 1
+
+# Combinar datos
+datos_stan4 <- list(N = N, utilidades = utilidades, prior_mu_mean = prior_mu_mean,
+              prior_mu_var = prior_mu_var, prior_sigma_shape = prior_sigma_shape,
+              prior_sigma_rate = prior_sigma_rate)
+
+# Especifica la ruta del archivo Stan
+ruta_archivo_stan4 <- "Ej2-incisoa.stan"
+
+# Compilar el modelo Stan desde el archivo
+modelo_stan4 <- stan_model(file = ruta_archivo_stan4)
+
+# Ejecutar el modelo Stan
+resultados_stan4 <- sampling(modelo_stan4, data = datos_stan4, chains = 4, iter = 10000)
+
+# Resumen de los resultados
+print(summary(resultados_stan4))
+
+# Graficar la posterior de mu
+mcmc_trace(resultados_stan4, pars = "mu")
+
+# Graficar la posterior de sigma_sq
+mcmc_trace(resultados_stan4, pars = "sigma_sq")
+
+# Graficar la posterior conjunta de mu y sigma_sq
+mcmc_scatter(resultados_stan4, pars = c("mu", "sigma_sq"))
+
+# Extracción de los valores de los parámetros
+parametros <- extract(resultados_stan4)
+mu_values <- parametros$mu
+sigma_sq_values <- parametros$sigma_sq
+
+# Cálculo de las medias
+mu_mean <- mean(mu_values)
+sigma_sq_mean <- mean(sigma_sq_values)
+
+# Impresión de los valores
+cat("El valor de mu es:", mu_mean, "\n")
+cat("El valor de sigma^2 es:", sigma_sq_mean, "\n")
+
+```
+
+#### Inciso b
+
+```{r}
+
+# Utilizando inicial no informativa para la varianza
+
+# Datos de utilidades mensuales
+utilidades <- c(212, 207, 210, 196, 223, 193, 196, 210, 202, 221)
+N <- length(utilidades)
+
+# Combinar datos sin priors específicos
+datos_stan5 <- list(N = N, utilidades = utilidades)
+
+# Especifica la ruta del archivo Stan (ajustado para usar sigma_sq)
+ruta_archivo_stan5 <- "Ej2-incisob.stan"
+
+# Compilar y ejecutar el modelo Stan corregido
+modelo_stan5 <- stan_model(file = ruta_archivo_stan5)
+resultados_stan5 <- sampling(modelo_stan5, data = datos_stan5, chains = 4, iter = 10000)
+
+# Resumen de los resultados
+print(summary(resultados_stan5))
+
+# Extracción de los valores de los parámetros del modelo ajustado
+parametros_ajustados <- extract(resultados_stan5)
+mu_values_ajustados <- parametros_ajustados$mu
+sigma_sq_values_ajustados <- parametros_ajustados$sigma_sq
+
+# Cálculo de las medias para el modelo ajustado
+mu_mean_ajustado <- mean(mu_values_ajustados)
+sigma_sq_mean_ajustado <- mean(sigma_sq_values_ajustados)
+
+# Impresión de los valores para el modelo ajustado
+cat("El valor de mu es:", mu_mean_ajustado, "\n")
+cat("El valor de sigma^2 es:", sigma_sq_mean_ajustado, "\n")
+
+```
+
+## Ejercicio 3:
+
+#### Paso 1: Datos
+
+```{r}
+
+calificaciones <- read.table("data/calificaciones.txt", header = TRUE, sep = "")
+
+
+```
+
+#### Paso 2 : Ver datos
+
+```{r}
+
+# Gráfica de dispersión con curva de regresión
+ggplot(calificaciones, aes(x = MO, y = SP)) +
+  geom_point() +  
+  geom_smooth(method = "lm", col = "red") +  
+  labs(title = "Relación entre Calificaciones de Moody’s y S&P",
+       x = "Calificaciones de Moody’s", y = "Calificaciones de S&P") +
+  theme_minimal()  
+
+
+```
+
+#### Paso 3: Modelo Stan
+
+```{r}
+datos_stan_calif <- list(N = nrow(calificaciones),
+                   x = calificaciones$MO,
+                   y = calificaciones$SP)
+
+
+ruta_modelo_calificaciones <- "Ej3-modelo.stan"
+
+# Compilar y ejecutar el modelo Stan
+modelo_stan_calif <- stan_model(file = ruta_modelo_calificaciones)
+resultados_stan_calif <- sampling(modelo_stan_calif, data = datos_stan_calif, chains = 4, iter = 10000, warmup = 1000)
+
+
+print(resultados_stan_calif)
+
+
+summary(resultados_stan_calif)
+
+
+```
+
+#### Paso 4: Gráficas e Interpretación
+
+```{r}
+
+# Graficar la traza de las muestras para verificar la convergencia
+mcmc_trace(resultados_stan_calif, pars = c("alpha", "beta", "sigma"))
+
+# Graficar las densidades posteriores para las estimaciones de los parámetros
+mcmc_dens(resultados_stan_calif, pars = c("alpha", "beta", "sigma"))
+
+# Graficar los intervalos de credibilidad para los parámetros
+mcmc_intervals(resultados_stan_calif, pars = c("alpha", "beta", "sigma"))
+
+# Graficar la distribución posterior conjunta para 'alpha', 'beta', y 'sigma'
+mcmc_pairs(resultados_stan_calif, pars = c("alpha", "beta", "sigma"))
+
+
+```
+
+#### Interpretación de los parámetros:
+
+-   **Alpha:** La estimación para la intersección (alpha) es de aproximadamente -1.70, con un intervalo de credibilidad del 95% entre -3.26 y -0.15. Esto sugiere que, en promedio, cuando la calificación de Moody's es cero, la calificación de S&P tiende a estar entre -3.26 y -0.15. La desviación estándar asociada a esta estimación es de aproximadamente 0.78, lo cual muestra la variabilidad e incertidumbre de la estimación.
+
+-   **Beta:** La estimación para la pendiente (beta) es de aproximadamente 0.84, con un intervalo de credibilidad del 95% entre 0.54 y 1.15. Esto indica que, en promedio, por cada aumento unitario en la calificación de Moody's, la calificación de S&P tiende a aumentar entre 0.54 y 1.15 unidades. La desviación estándar asociada a esta estimación es de aproximadamente 0.15.
+
+-   **Sigma:** La desviación estándar del término de error (sigma) tiene una estimación de aproximadamente 0.47, con un intervalo de credibilidad del 95% entre 0.34 y 0.66. Esto indica la dispersión de los errores en las predicciones del modelo. La desviación estándar asociada a esta estimación es de aproximadamente 0.08.
+
+#### Diagnósticos de convergencia:
+
+Los diagnósticos de convergencia (n_eff y Rhat) muestran valores adecuados para todos los parámetros, lo que indica una buena convergencia del modelo.
+
+En resumen, este análisis bayesiano proporciona estimaciones precisas para los parámetros del modelo de regresión lineal, lo que nos permite entender la relación entre las calificaciones de Moody's y S&P en el contexto de las calificaciones de 20 empresas financieras. Los resultados respaldan la idea inicial de una asociación estadísticamente significativa y positiva entre las calificaciones de ambas compañías calificadoras.
+
+#### Predicciones posteriores:
+
+```{r}
+
+# Generar predicciones posteriores manualmente porque no me funciona posterior_predict()
+
+# Convertir el objeto stanfit a un data frame
+muestras_df <- as.data.frame(extract(resultados_stan_calif))
+
+# Definir el número de muestras y el número de observaciones en los datos
+num_muestras <- nrow(muestras_df)
+num_observaciones <- datos_stan_calif$N
+
+# Inicializar un vector para almacenar las predicciones posteriores
+predicciones_posteriores <- numeric(length = num_muestras * num_observaciones)
+
+# Calcular las predicciones posteriores para cada muestra
+for (i in 1:num_muestras) {
+  alpha <- muestras_df[i, "alpha"]
+  beta <- muestras_df[i, "beta"]
+  sigma <- muestras_df[i, "sigma"]
+  
+  # Calcular las predicciones posteriores usando los parámetros muestreados
+  predicciones <- rnorm(n = num_observaciones, mean = alpha + beta * datos_stan_calif$x, sd = sigma)
+  
+  # Almacenar las predicciones en el vector predicciones_posteriores
+  predicciones_posteriores[((i - 1) * num_observaciones + 1):(i * num_observaciones)] <- predicciones
+}
+
+# Crear un histograma de las predicciones posteriores
+hist(predicciones_posteriores, main = "Predicciones Posteriores", xlab = "Calificaciones de S&P", ylab = "Frecuencia", col = "lightblue")
+
+# Agregar unas líneas vertical para los datos observados
+abline(v = datos_stan_calif$y, col = "red", lwd = 2)
+
+
+
+
+```
+
+```{r}
+samples <- extract(resultados_stan_calif)
+
+n_obs <- length(calificaciones$SP)  # Número de observaciones
+n_samples <- dim(samples$alpha)[1]  # Número de muestras en la cadena MCMC
+yrep <- matrix(NA, nrow = n_obs, ncol = n_samples)  # Matriz para almacenar predicciones
+
+for (i in 1:n_samples) {
+  yrep[, i] <- samples$alpha[i] +
+               samples$beta[i] * calificaciones$MO
+}
+
+predicciones_media <- apply(yrep, 1, mean)
+
+if(length(calificaciones$SP) == length(predicciones_media)) {
+  # Primero crea el gráfico de dispersión
+  plot(calificaciones$SP, predicciones_media,
+       xlab = "Valores Observados",
+       ylab = "Media de Valores Predichos",
+       main = "PPC: Valores Observados vs. Media de Valores Predichos")
+  
+  # Luego, añade la línea roja usando abline()
+  abline(a = 0, b = 1, col = "red")
+} else {
+  stop("La longitud de los datos observados y las predicciones no coincide.")
+}
+
+```
+
+El gráfico ilustra la comparación entre las calificaciones observadas y las predicciones generadas por el modelo. Se observan varias desviaciones entre los datos reales y las predicciones del modelo, lo que indica que existen áreas donde el modelo podría ser mejorado para lograr una mayor precisión en sus predicciones.
+
+## Ejercicio 4:
+
+#### Parte 1: Datos
+
+```{r}
+
+# Y = salario en miles de usd
+# X1 = el índice de calidad de trabajo
+# X2 = número de años de experiencia 
+# X3 = índice de éxito en publicaciones
+
+salarios <- read.table("data/salarios.txt", header = TRUE, sep = "", dec = ".")
+
+
+# Gráfico de dispersión de Y vs X1
+ggplot(salarios, aes(x = X1, y = Y)) + 
+  geom_point() + 
+  labs(title = "Gráfico de dispersión de Salarios vs Calidad de Trabajo", x = "Índice de Calidad de Trabajo (X1)", y = "Salario Anual (Y)")
+
+# Gráfico de dispersión de Y vs X2
+ggplot(salarios, aes(x = X2, y = Y)) + 
+  geom_point() + 
+  labs(title = "Gráfico de dispersión de Salarios vs Años de Experiencia", x = "Número de Años de Experiencia (X2)", y = "Salario Anual (Y)")
+
+# Gráfico de dispersión de Y vs X3
+ggplot(salarios, aes(x = X3, y = Y)) + 
+  geom_point() + 
+  labs(title = "Gráfico de dispersión de Salarios vs Índice de Éxito en Publicaciones", x = "Índice de Éxito en Publicaciones (X3)", y = "Salario Anual (Y)")
+
+
+```
+
+#### Parte 2: Modelo
+
+```{r}
+
+datos_salarios <- list(N = nrow(salarios),
+                   X1 = salarios$X1,
+                   X2 = salarios$X2,
+                   X3 = salarios$X3,
+                   Y = salarios$Y,
+                   N_new = 5,
+                   X1_new = c(5, 4, 17, 6, 0),
+                   X2_new = c(6, 2, 12, 5, 8),
+                   X3_new = c(6, 4, 21, 6, 1))
+
+modelo_salarios <- stan_model(file = "Ej4-modelo.stan")
+
+ajuste_salarios <- sampling(modelo_salarios, data = datos_salarios, iter = 10000, chains = 4)
+
+print(ajuste_salarios, pars = c("alpha", "beta1", "beta2", "beta3", "sigma"))
+
+predicciones_salarios <- extract(ajuste_salarios)$salary_pred
+
+
+```
+
+#### Parte 3: Interpretación y Gráficas
+
+-   **`alpha`** (Intercepto): La media de la distribución posterior es 17.08, lo que sugiere que, manteniendo todas las demás variables en cero, el salario anual promedio en miles de dólares sería de aproximadamente 17,080 USD.
+
+-   **`beta1`** (Coeficiente para X1 - índice de calidad de trabajo): La media de 1.17 indica que por cada unidad que aumenta el índice de calidad de trabajo, esperaríamos que el salario anual promedio aumente en 1,170 USD, manteniendo constantes las demás variables.
+
+-   **`beta2`** (Coeficiente para X2 - número de años de experiencia): La media de 0.32 sugiere un aumento esperado en el salario anual de 320 USD por cada año adicional de experiencia, ceteris paribus.
+
+-   **`beta3`** (Coeficiente para X3 - índice de éxito en publicaciones): Con una media de 1.36, se interpreta que por cada punto adicional en el índice de éxito en publicaciones, se espera un incremento de 1,360 USD en el salario anual, manteniendo las demás variables constantes.
+
+-   **`sigma`** (Desviación estándar del error): La media de la distribución posterior es 1.84, lo que indica que la desviación estándar de los errores alrededor de la línea de regresión es de aproximadamente 1,840 USD.
+
+-   Los valores de **`n_eff`** son altos y los valores de **`Rhat`** son 1, lo que indica que las muestras son informativas y que las cadenas han convergido bien.
+
+```{r}
+
+mcmc_hist(ajuste_salarios, pars = c("alpha", "beta1", "beta2", "beta3", "sigma"))
+
+ggplot(salarios, aes(x = X1, y = Y)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE) +
+  labs(title = "Gráfico de dispersión de Salarios vs Calidad de Trabajo con Línea de Regresión",
+       x = "Índice de Calidad de Trabajo (X1)", y = "Salario Anual (Y)")
+
+ggplot(salarios, aes(x = X2, y = Y)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE) +
+  labs(title = "Gráfico de dispersión de Salarios vs Años de Experiencia",
+       x = "Añps de Experiencia (X2)", y = "Salario Anual (Y)")
+
+ggplot(salarios, aes(x = X3, y = Y)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE) +
+  labs(title = "Gráfico de dispersión de Salarios vs Índice de Éxito en Publicaciones con Línea de Regresión",
+       x = "Índice de Éxito en Publicaciones (X3)", y = "Salario Anual (Y)")
+
+mcmc_dens_overlay(ajuste_salarios)
+
+```
+
+```{r}
+
+# Chequeos predictivos posteriores (PPC) 
+
+# Generar predicciones posteriores manualmente porque no me funciona posterior_predict()
+
+# Extraer las muestras de los parámetros del modelo
+samples <- extract(ajuste_salarios)
+
+# Asumiendo que tus nombres de parámetros son 'alpha', 'beta1', 'beta2', 'beta3' y 'sigma'
+# Genera predicciones posteriores para cada observación
+n_obs <- length(salarios$Y)  # Número de observaciones
+n_samples <- dim(samples$alpha)[1]  # Número de muestras en la cadena MCMC
+yrep <- matrix(NA, nrow = n_obs, ncol = n_samples)  # Matriz para almacenar predicciones
+
+for (i in 1:n_samples) {
+  yrep[, i] <- samples$alpha[i] +
+               samples$beta1[i] * salarios$X1 +
+               samples$beta2[i] * salarios$X2 +
+               samples$beta3[i] * salarios$X3
+}
+
+# Ahora 'yrep' contiene las predicciones posteriores
+
+# Calcular la media de las predicciones
+predicciones_media <- apply(yrep, 1, mean)
+
+# Asegúrate de que 'salarios$Y' y 'predicciones_media' tienen la misma longitud
+if(length(salarios$Y) == length(predicciones_media)) {
+  # Primero crea el gráfico de dispersión
+  plot(salarios$Y, predicciones_media,
+       xlab = "Valores Observados",
+       ylab = "Media de Valores Predichos",
+       main = "PPC: Valores Observados vs. Media de Valores Predichos")
+  
+  # Luego, añade la línea roja usando abline()
+  abline(a = 0, b = 1, col = "red")
+} else {
+  stop("La longitud de los datos observados y las predicciones no coincide.")
+}
+
+```
+
+El gráfico muestra cómo se comparan los salarios observados con las predicciones del modelo. La mayoría de los puntos están cerca de la línea roja, lo que indica una buena concordancia entre los valores observados y predichos. Sin embargo, hay algunas desviaciones, lo que sugiere que el modelo podría mejorarse en ciertas áreas.
+
+## Ejercicio 5:
+
+#### Parte 1:
+
+##### Datos y modelo logit binomial :
+
+```{r}
+
+# pii = probabilidad de muerte
+# xi = tiempo de exposición al mineral
+# yi = número de muertes 
+# varianza = 1/precisión 
+
+# Como vimos en clase, en este ejercicio b0 y b1 estan en terminos de precision y no de varianza por lo que bi~ N(mu = 0, precisión = 0.001) -> en términos de varianza sería bi~ N(mu=0, 1000 )
+
+# La relación entre la probabilidad de muerte y el tiempo de exposición se modela a través de la función logit que es el logaritmo de las odds (probabilidad de que ocurra el evento dividido por la probabilidad de que no ocurra): logit(pii) = log( pii / 1 - pii ) = b0 + b1*xi
+
+# Leer los datos
+datos_mortality <- read.table("data/mortality.txt", header = TRUE, sep = "")
+
+# Prepara los datos para Stan, incluyendo nuevos datos para predicción
+stan_data_mortality <- list(
+  N = nrow(datos_mortality),
+  y = datos_mortality$y,
+  n = datos_mortality$n,
+  x = as.vector(datos_mortality$x),
+  new_N = 100, 
+  new_x = 200, 
+  new_n = rep(1, 100)
+)
+
+# Ajusta el modelo con los datos
+fit_mortality <- stan(file = "Ej5-modelo1.stan", data = stan_data_mortality, iter = 10000, chains = 4)
+
+# Ver un resumen de los resultados
+print(fit_mortality)
+summary(fit_mortality)
+
+# Extraer las estimaciones de los parámetros
+estimaciones_mortality <- extract(fit_mortality)
+alpha_est <- estimaciones_mortality$alpha
+beta_est <- estimaciones_mortality$beta
+
+# Extraer las predicciones generadas por el modelo para los nuevos mineros
+y_pred_mortality <- estimaciones_mortality$y_pred
+
+# Calcular la media y la desviación estándar de las predicciones para nuevos mineros
+mean_pred_mortality <- colMeans(y_pred_mortality)
+sd_pred_mortality <- apply(y_pred_mortality, 2, sd)
+
+# Mostrar los resultados para los nuevos mineros
+cat("La media predictiva de muertes para nuevos mineros es:", mean(mean_pred_mortality), "\n")
+cat("La desviación estándar predictiva de muertes para nuevos mineros es:", mean(sd_pred_mortality), "\n")
+
+
+
+```
+
+##### Gráficas e Interpretación:
+
+```{r}
+
+# Trace plot de las cadenas MCMC para beta0 y beta1
+mcmc_trace(as.array(fit_mortality), pars = c("alpha", "beta"))
+
+# Densidades posteriores de alpha y beta
+mcmc_dens_overlay(as.array(fit_mortality), pars = c("alpha", "beta"))
+
+# Relación entre tiempo de exposición y probabilidad de muerte
+ggplot(datos_mortality, aes(x = x, y = y/n)) + 
+  geom_point() + 
+  stat_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE)
+
+# Intervalos de credibilidad para alpha y beta
+mcmc_intervals(as.array(fit_mortality), pars = c("alpha", "beta"))
+
+
+```
+
+**Interpretación de alpha (Intercepto):** La estimación para alpha está ajustada alrededor de cero con un intervalo confiable y estrecho, lo que implica que el riesgo inicial de fallecimiento, independiente del tiempo de exposición, es mínimo y se ha determinado con alta precisión en el modelo.
+
+**Interpretación de beta (Pendiente):** Beta se estima también en torno a cero y su intervalo de credibilidad es reducido, señalando una ausencia de influencia significativa del tiempo de exposición sobre la probabilidad de muerte, basado en el espectro de exposición presente en los datos. Esta estimación de pendiente se calcula con gran exactitud.
+
+**Predicciones del Modelo:** La **media predictiva de muertes** es de cerca de 0.223, lo que refleja la expectativa del modelo de que, de cada 100 mineros expuestos 200 horas al mineral, alrededor de 22 podrían fallecer, según los datos históricos y las suposiciones del modelo. La **desviación estándar predictiva baja de 0.416** comunica una fuerte seguridad en la media calculada y una variabilidad baja en las proyecciones de muertes del modelo.
+
+```{r}
+
+# PPC 
+
+# Extraer las muestras de los parámetros del modelo
+samples <- extract(fit_mortality)
+
+# Definir la función inv_logit
+inv_logit <- function(x) {
+  exp(x) / (1 + exp(x))
+}
+
+# Generar predicciones posteriores para cada observación
+n_obs <- length(datos_mortality$y)  # Número de observaciones
+n_samples <- dim(samples$alpha)[1]   # Número de muestras en la cadena MCMC
+yrep <- matrix(NA, nrow = n_obs, ncol = n_samples)  # Matriz para almacenar predicciones
+
+for (i in 1:n_samples) {
+  mu <- samples$alpha[i] + samples$beta[i] * datos_mortality$x
+  yrep[, i] <- rbinom(n_obs, datos_mortality$n, inv_logit(mu))  # Muestreo de distribución binomial usando inversa de la función logit
+}
+
+# Calcular la media de las predicciones
+predicciones_media <- apply(yrep, 1, mean)
+
+# Asegúrate de que 'datos_mortality$y' y 'predicciones_media' tienen la misma longitud
+if (length(datos_mortality$y) == length(predicciones_media)) {
+  # Crea el gráfico de dispersión
+  plot(datos_mortality$y, predicciones_media,
+       xlab = "Valores Observados",
+       ylab = "Media de Valores Predichos",
+       main = "PPC: Valores Observados vs. Media de Valores Predichos")
+  
+  # Añade la línea roja usando abline()
+  abline(a = 0, b = 1, col = "red")
+} else {
+  stop("La longitud de los datos observados y las predicciones no coincide.")
+}
+
+
+```
+
+El gráfico muestra cómo se comparan las muertes observadas con las predicciones del modelo. La mayoría de los puntos están cerca de la línea roja, lo que indica una buena concordancia entre los valores observados y predichos. Sin embargo, hay algunas desviaciones, lo que sugiere que el modelo podría mejorarse en ciertas áreas.
+
+#### Parte 2: "inciso a"
+
+##### Inciso i)
+
+```{r}
+
+# install.packages(boot)
+library(boot)
+
+# Cargar datos
+data(coal)
+
+# Convertir las fechas de 'coal' en años y contar los desastres por año
+year <- floor(coal)  # 'coal' es un vector
+disasters <- table(year)  # Conteo de desastres por año
+
+# Crear el vector de años y el vector de conteos
+years <- as.numeric(names(disasters))
+counts <- as.numeric(disasters)
+
+# Gráfico de dispersión
+plot(years, counts, type = "p", col = "blue", xlab = "Año", ylab = "Número de desastres",
+     main = "Número de desastres por año")
+
+# Compilar y ajustar el modelo de Stan
+stan_model_muertes <- stan_model(file = "Ej5-modelo2.stan")
+
+fit_muertes <- sampling(stan_model_muertes, 
+                data = list(N = length(counts), y = counts, x = years), 
+                iter = 10000, 
+                chains = 4)
+
+# Ver los resultados del modelo
+print(fit_muertes)
+summary(fit_muertes)
+
+# Extraer las estimaciones de los parámetros
+estimaciones_desastres <- extract(fit_muertes)
+alpha_est <- estimaciones_desastres$alpha
+beta_est <- estimaciones_desastres$beta
+
+# Extraer las predicciones generadas por el modelo para los años observados
+y_pred_desastres <- estimaciones_desastres$y_pred
+
+# Calcular la media y la desviación estándar de las predicciones
+mean_pred_desastres <- colMeans(y_pred_desastres)
+sd_pred_desastres <- apply(y_pred_desastres, 2, sd)
+
+# Mostrar los resultados para las predicciones de desastres por año
+cat("La media predictiva de desastres por año es:", mean(mean_pred_desastres), "\n")
+cat("La desviación estándar predictiva de desastres por año es:", mean(sd_pred_desastres), "\n")
+
+
+```
+
+##### Gráficas e interpretación
+
+```{r}
+
+# Trace plot de las cadenas MCMC para alpha y beta
+mcmc_trace(as.array(fit_muertes), pars = c("alpha", "beta"))
+
+# Densidades posteriores de alpha y beta
+mcmc_dens_overlay(as.array(fit_muertes), pars = c("alpha", "beta"))
+
+# Relación entre año y probabilidad de desastre
+ggplot(data = data.frame(x = years, y = counts), aes(x = x, y = y)) +
+  geom_point() +
+  stat_smooth(method = "glm", method.args = list(family = "poisson"), se = FALSE)
+
+# Intervalos de credibilidad para alpha y beta
+mcmc_intervals(as.array(fit_muertes), pars = c("alpha", "beta"))
+```
+
+Basándonos en el modelo estadístico, estimamos que la mina experimenta en promedio 2.42 desastres al año, con una variabilidad típica que podría resultar en un rango de 0.86 a 3.98 desastres en un año dado. Estos números ayudarán a la compañía de seguros a evaluar los riesgos y a planificar adecuadamente sus pólizas y estrategias de mitigación.
+
+-   **alpha**:
+    -   Valor estimado: 22.92
+    -   Intervalo de credibilidad del 95%: \[13.23, 32.53\]
+    -   Interpretación: El parámetro alpha representa el nivel de desastres en la mina cuando todas las demás variables se mantienen constantes. Según el modelo, estimamos que el nivel basal de desastres en la mina es aproximadamente 22.92. Sin embargo, dado el intervalo de credibilidad del 95%, podemos estar aproximadamente 95% seguros de que el verdadero valor de alpha cae en el rango de 13.23, 32.53, lo cual es bastante amplio y refleja la incertidumbre.
+-   **beta**:
+    -   Valor estimado: -0.01
+    -   Intervalo de credibilidad del 95%: \[-0.02, -0.01\]
+    -   Interpretación: El parámetro beta representa la relación entre el tiempo (año) y la tasa de desastres en la mina. Según este modelo, estimamos que por cada aumento unitario en el año, la tasa de desastres en la mina disminuye en aproximadamente 0.01 unidades. El intervalo de credibilidad del 95% sugiere que podemos estar aproximadamente 95% seguros de que la verdadera relación entre el tiempo y la tasa de desastres cae en el rango de -0.02 a -0.01.
+-   La media predictiva de desastres por año es: 2.416199
+-   La desviación estándar predictiva de desastres por año es: 1.550927
+
+```{r}
+
+# PPC
+
+# Extraer las muestras de los parámetros del modelo
+samples <- extract(fit_muertes)
+
+# Definir la función inv_logit
+inv_logit <- function(x) {
+  exp(x) / (1 + exp(x))
+}
+
+# Generar predicciones posteriores para cada observación
+n_obs <- length(years)  # Número de observaciones
+n_samples <- dim(samples$alpha)[1]   # Número de muestras en la cadena MCMC
+yrep <- matrix(NA, nrow = n_obs, ncol = n_samples)  # Matriz para almacenar predicciones
+
+for (i in 1:n_samples) {
+  mu <- samples$alpha[i] + samples$beta[i] * years
+  yrep[, i] <- rpois(n_obs, exp(mu))  # Muestreo de distribución de Poisson usando la media de mu
+}
+
+# Calcular la media de las predicciones
+predicciones_media <- apply(yrep, 1, mean)
+
+# Calcular los límites del gráfico
+x_limits <- range(c(counts, predicciones_media))
+y_limits <- range(c(counts, predicciones_media))
+
+# Crear el gráfico de dispersión con los límites ajustados
+plot(counts, predicciones_media,
+     xlab = "Valores Observados",
+     ylab = "Media de Valores Predichos",
+     main = "PPC: Valores Observados vs. Media de Valores Predichos",
+     xlim = x_limits,
+     ylim = y_limits)
+
+# Añadir una línea roja con pendiente positiva 
+abline(a = 0, b = 1, col = "red")
+
+
+  
+
+```
+
+Observamos que el modelo no se ajusta adecuadamente a los datos. Esto sugiere que el modelo no captura completamente la estructura subyacente de los desastres en la mina a lo largo del tiempo. Es posible que existan otros factores no considerados en el modelo que influyan en la ocurrencia de desastres, o que la relación entre el tiempo y la frecuencia de desastres no sea lineal como se asumió en el modelo.
+
+##### Inciso ii)
+
+```{r}
+
+
+# El parámetro tau es el punto de inflexión que indica el año en el que cambia la tasa de desastres. Antes de este punto, la tasa es determinada por alpha (b0), y después de este punto, la tasa se incrementa en beta (b1).
+
+library(rstan)
+library(boot)
+
+# Cargar los datos
+data(coal)
+
+# Convertir las fechas a años completos desde 1851 y contar los desastres por año
+disaster_years <- as.integer(floor(coal$date))
+disaster_counts <- table(disaster_years)
+
+# Generar un vector de todos los años desde el primer hasta el último año registrado
+all_years <- seq(from = min(disaster_years), to = max(disaster_years))
+
+# Inicializar un vector para contar los desastres, llenándolo con ceros para todos los años
+counts_full <- setNames(rep(0, length(all_years)), all_years)
+
+# Actualizar los conteos basados en los desastres registrados
+counts_full[names(disaster_counts)] <- as.integer(disaster_counts)
+
+# Convertir los conteos a un vector numérico sin nombres
+counts <- as.integer(counts_full)
+
+# Preparar los datos para Stan incluyendo min_year y max_year
+stan_data <- list(
+  N = length(all_years),
+  disasters = counts,
+  years = as.numeric(names(counts_full)),
+  min_year = as.numeric(min(all_years)),  # Añadiendo min_year
+  max_year = as.numeric(max(all_years))   # Añadiendo max_year
+)
+
+# Asegúrate de ajustar la ruta al archivo Stan
+stan_model_path <- "Ej5-modelo3.stan"
+
+# Compilar y ajustar el modelo Stan
+stan_model <- stan_model(file = stan_model_path)
+fit <- sampling(stan_model, data = stan_data, iter = 10000, warmup = 5000, chains = 4)
+
+# Imprimir los resultados
+print(fit)
+
+
+
+
+```
+
+```{r}
+
+summary(fit)
+```
+
+**`beta0` (Intercepto):**
+
+-   **Media**: La media de **`beta0`** es aproximadamente 1.137, lo que indica el valor esperado del logaritmo de la tasa de desastres en el año base (antes del punto de cambio **`tau`**).
+
+-   **Desviación estándar (sd)**: Una desviación estándar de 0.096 sugiere una variabilidad moderada en las estimaciones de **`beta0`**.
+
+-   **IC 95%**: El intervalo de credibilidad al 95% va desde aproximadamente 0.945 hasta 1.323, indicando dónde se espera que caiga el verdadero valor de **`beta0`** el 95% del tiempo, según el modelo.
+
+-   **Convergencia**: Un **`Rhat`** de 1.004990 está muy cerca de 1, lo que generalmente indica una buena convergencia. **`n_eff`** de aproximadamente 830 es un tamaño de muestra efectivo aceptable, aunque no tan grande como el ejemplo proporcionado.
+
+**`beta1` (Pendiente después del punto de cambio `tau`):**
+
+-   **Media**: La media de **`beta1`** es aproximadamente -1.228, lo que sugiere una disminución en la tasa logarítmica de desastres después del punto de cambio **`tau`**.
+
+-   **Desviación estándar (sd)**: Una desviación estándar de 0.155 indica una variabilidad moderada en las estimaciones de **`beta1`**.
+
+-   **IC 95%**: El intervalo de credibilidad al 95% va desde aproximadamente -1.533 hasta -0.932, lo cual no cruza cero y sugiere que hay un efecto significativo de la variable tiempo en la tasa de desastres después de **`tau`**.
+
+-   **Convergencia**: El **`Rhat`** de 1.002887 es muy cercano a 1, lo que indica buena convergencia. **`n_eff`** de aproximadamente 888 es adecuado, lo que sugiere que las estimaciones son confiables.
+
+**`tau` (Año de cambio):**
+
+-   **Media**: La media de **`tau`** es aproximadamente 1890.49, lo que sugiere que el cambio en la tasa de desastres se centra alrededor de este año.
+
+-   **Desviación estándar (sd)**: Una desviación estándar de 2.448 indica que hay una cierta incertidumbre acerca del año exacto en que ocurrió el cambio, pero esta incertidumbre no es excesivamente grande.
+
+-   **IC 95%**: El intervalo de credibilidad al 95% va desde aproximadamente 1886.15 hasta 1896.44, proporcionando una ventana de tiempo dentro de la cual es probable que haya ocurrido el cambio.
+
+-   **Convergencia**: Un **`Rhat`** de 1.001399 y un **`n_eff`** de aproximadamente 985 sugieren que el muestreo ha convergido bien y que las estimaciones de **`tau`** son robustas.
+
+```{r}
+
+mcmc_trace(fit, pars = c("beta0", "beta1", "tau"))
+mcmc_areas(fit, pars = c("beta0", "beta1", "tau"))
+mcmc_pairs(fit, pars = c("beta0", "beta1", "tau"))
+mcmc_acf(fit, pars = c("beta0", "beta1", "tau"))
+mcmc_intervals(fit, pars = c("beta0", "beta1", "tau"))
+
+```
